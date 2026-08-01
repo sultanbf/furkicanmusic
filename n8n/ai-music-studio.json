@@ -1,0 +1,366 @@
+{
+  "name": "AI Music Studio - Suno Uretim",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ai-music-uret",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "11111111-1111-4111-8111-111111111101",
+      "name": "Webhook (Siteden Gelen)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "11111111-1111-4111-8111-111111111101"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.sunoapi.org/api/v1/generate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUNO_API_KEY}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "keypair",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "prompt",
+              "value": "={{ $json.lyrics ? $json.lyrics : $json.prompt }}"
+            },
+            {
+              "name": "style",
+              "value": "={{ $json.lyrics ? $json.style : '' }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $json.lyrics ? $json.title : '' }}"
+            },
+            {
+              "name": "customMode",
+              "value": "={{ $json.lyrics ? true : false }}"
+            },
+            {
+              "name": "instrumental",
+              "value": "={{ $json.instrumental ? true : false }}"
+            },
+            {
+              "name": "model",
+              "value": "={{ $json.model || 'V4_5' }}"
+            },
+            {
+              "name": "vocalGender",
+              "value": "={{ $json.vocalGender === 'kadin' ? 'f' : 'm' }}"
+            },
+            {
+              "name": "callBackUrl",
+              "value": ""
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111102",
+      "name": "Suno: Görevi Oluştur",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 0]
+    },
+    {
+      "parameters": {
+        "resume": "timeInterval",
+        "amount": 30,
+        "unit": "seconds"
+      },
+      "id": "11111111-1111-4111-8111-111111111103",
+      "name": "Bekle 30 sn",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [520, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.sunoapi.org/api/v1/generate/record-info",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "taskId",
+              "value": "={{ $json.data.taskId }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{$env.SUNO_API_KEY}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111104",
+      "name": "Suno: Durum Sorgula",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [780, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-count-0001",
+              "name": "count",
+              "value": "={{ ($json.count || 0) + 1 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {
+          "ignoreNullValues": false
+        }
+      },
+      "id": "11111111-1111-4111-8111-111111111108",
+      "name": "Sayacı Artır",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1040, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "if-success-0001",
+              "leftValue": "={{ $json.data.status }}",
+              "rightValue": "SUCCESS",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111109",
+      "name": "IF: Başarılı mı?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "if-error-0001",
+              "leftValue": "={{ ['CREATE_TASK_FAILED','GENERATE_AUDIO_FAILED','CALLBACK_EXCEPTION','SENSITIVE_WORD_ERROR'].includes($json.data.status) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111110",
+      "name": "IF: Hata mı?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1560, 140]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "if-timeout-0001",
+              "leftValue": "={{ $json.count }}",
+              "rightValue": 24,
+              "operator": {
+                "type": "number",
+                "operation": "larger"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111111",
+      "name": "IF: Zaman Aşımı mı?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1820, 140]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ id: $json.data.taskId, provider: 'n8n', status: 'complete', title: ($json.data.response.sunoData && $json.data.response.sunoData[0] && $json.data.response.sunoData[0].title) || 'AI Music', audioUrl: $json.data.response.sunoData[0].audioUrl, imageUrl: $json.data.response.sunoData[0].imageUrl || '', tags: $json.data.response.sunoData[0].tags || '' }) }}",
+        "responseCode": 200,
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111106",
+      "name": "Yanıt: Müzik Hazır",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1560, -160]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ id: $json.data.taskId || '', provider: 'n8n', status: 'error', message: $json.data.errorMessage || $json.data.status || 'Bilinmeyen hata' }) }}",
+        "responseCode": 200,
+        "options": {}
+      },
+      "id": "11111111-1111-4111-8111-111111111107",
+      "name": "Yanıt: Hata",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2080, 260]
+    }
+  ],
+  "connections": {
+    "Webhook (Siteden Gelen)": {
+      "main": [
+        [
+          {
+            "node": "Suno: Görevi Oluştur",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suno: Görevi Oluştur": {
+      "main": [
+        [
+          {
+            "node": "Bekle 30 sn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bekle 30 sn": {
+      "main": [
+        [
+          {
+            "node": "Suno: Durum Sorgula",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suno: Durum Sorgula": {
+      "main": [
+        [
+          {
+            "node": "Sayacı Artır",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sayacı Artır": {
+      "main": [
+        [
+          {
+            "node": "IF: Başarılı mı?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Başarılı mı?": {
+      "main": [
+        [
+          {
+            "node": "Yanıt: Müzik Hazır",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF: Hata mı?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Hata mı?": {
+      "main": [
+        [
+          {
+            "node": "Yanıt: Hata",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF: Zaman Aşımı mı?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Zaman Aşımı mı?": {
+      "main": [
+        [
+          {
+            "node": "Yanıt: Hata",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bekle 30 sn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Europe/Istanbul"
+  }
+}
