@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Music Studio — Geçmiş</title>
+  <meta name="description" content="Oluşturduğunuz tüm müzikler burada listelenir." />
+  <link rel="stylesheet" href="assets/css/style.css?v=5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📚</text></svg>" />
+</head>
+<body>
+  <div class="container">
+    <h1 class="page-title">Geçmiş Müzikleriniz</h1>
+    <p class="page-sub">Oluşturduğunuz tüm müzikler burada listelenir</p>
+
+    <div class="card" style="margin-bottom: 20px">
+      <div class="btn-row" style="margin-top: 0; justify-content: space-between; align-items: center">
+        <span id="historyCount" style="color: var(--text-dim); font-size: 0.9rem">0 müzik</span>
+        <button class="btn btn-danger btn-sm" id="clearAllBtn">🗑️ Tümünü Sil</button>
+      </div>
+    </div>
+
+    <div id="historyList"></div>
+
+    <div id="emptyState" class="empty-state hidden">
+      <div class="big">🎶</div>
+      <h3>Henüz müzik oluşturmadınız</h3>
+      <p style="margin: 8px 0 18px">Dashboard'dan yeni müzik oluşturarak geçmişinizi doldurun.</p>
+      <a href="index.html" class="btn btn-primary" style="width: auto">🎵 Müzik Oluştur</a>
+    </div>
+  </div>
+
+  <script src="assets/js/common.js?v=5"></script>
+  <script>
+    renderShell("/history.html");
+
+    const listEl = document.getElementById("historyList");
+    const emptyEl = document.getElementById("emptyState");
+    const countEl = document.getElementById("historyCount");
+
+    function render() {
+      const items = History.getAll();
+      countEl.textContent = `${items.length} müzik`;
+      emptyEl.classList.toggle("hidden", items.length > 0);
+      listEl.innerHTML = "";
+
+      items.forEach((item) => {
+        const row = document.createElement("div");
+        row.className = "history-item";
+        const date = new Date(item.createdAt).toLocaleString("tr-TR", { dateStyle: "medium", timeStyle: "short" });
+        const badge = item.provider === "suno" ? "✨ Suno API" : "🔗 n8n";
+
+        row.innerHTML = `
+          <div class="h-cover">
+            ${item.imageUrl && item.imageUrl !== "assets/img/cover-placeholder.svg"
+              ? `<img src="${item.imageUrl}" alt="" style="width:100%;height:100%;border-radius:10px;object-fit:cover" onerror="this.remove()" />`
+              : "🎵"}
+          </div>
+          <div class="h-info">
+            <h5>${item.title || "Şarkı"} <span style="font-size:0.7rem;color:var(--text-dim)">${badge}</span></h5>
+            <p>${item.tags || "—"} · ${date}</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="playItem(this)" data-audio="${item.audioUrl}">▶️</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteItem('${item.id}')">✖</button>`;
+        listEl.appendChild(row);
+      });
+    }
+
+    window.playItem = function (btn) {
+      const url = btn.dataset.audio;
+      if (!url) return;
+      const audio = document.getElementById("floatingAudio");
+      if (!audio) {
+        const a = document.createElement("audio");
+        a.id = "floatingAudio";
+        a.controls = true;
+        a.style.cssText = "position:fixed;bottom:16px;right:16px;z-index:999;width:320px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px;box-shadow:var(--shadow)";
+        document.body.appendChild(a);
+      }
+      document.getElementById("floatingAudio").src = url;
+      document.getElementById("floatingAudio").play();
+    };
+
+    window.deleteItem = function (id) {
+      History.remove(id);
+      render();
+      toast("Kayıt silindi", "info");
+    };
+
+    document.getElementById("clearAllBtn").addEventListener("click", () => {
+      if (!confirm("Tüm geçmiş silinsin mi?")) return;
+      History.clear();
+      render();
+      toast("Geçmiş temizlendi", "success");
+    });
+
+    render();
+  </script>
+</body>
+</html>

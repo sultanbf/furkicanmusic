@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Music Studio — Müzik Oluştur</title>
+  <meta name="description" content="Yapay zeka ile müzik üret. Stilini seç, sözlerini yaz, Suno.ai gücüyle profesyonel şarkı üret." />
+  <link rel="stylesheet" href="assets/css/style.css?v=5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>" />
+</head>
+<body>
+  <div class="container">
+    <h1 class="page-title">Yapay Zeka ile Müzik Üret</h1>
+    <p class="page-sub">Tarzını seç, sözlerini yaz, AI senin için profesyonel müzik üretsin. ✨</p>
+
+    <div class="grid-2 cols-wide">
+      <!-- Sol: Form -->
+      <div class="card">
+        <h3><span class="emoji">🎛️</span> Şarkı Detayları</h3>
+
+        <label for="songStyle">Müzik Stili</label>
+        <input type="text" id="songStyle" placeholder="Örn: epik orkestral, synthwave, duygusal pop, trap beat..." />
+
+        <label for="songLyrics">Şarkı Sözleri</label>
+        <textarea id="songLyrics" placeholder="Verse, koro ve bridge bölümlerini belirtebilirsiniz. Boş bırakırsanız Suno sözleri kendi üretir."></textarea>
+        <div class="char-count" id="songLyricsCount">0 / 5000</div>
+
+        <label for="songName">Şarkı İsmi</label>
+        <input type="text" id="songName" placeholder="Örn: Gece Şehri" maxlength="80" />
+
+        <div style="height: 8px"></div>
+
+        <div class="toggle-row">
+          <div>
+            <span class="label">🎼 Enstrümantal</span>
+            <span class="hint">Vokal olmadan sadece müzik</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="instrumental" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <span class="label">🎬 Video Üret</span>
+            <span class="hint">Açıkken MP4 siteye döner; kapalıyken müzik Google Drive'a yüklenir</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="makeVideo" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <span class="label">🤖 Sözleri AI Yazsın</span>
+            <span class="hint">Sözler boşsa otomatik üretilsin</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoLyrics" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <label for="vocalGender">Vokal Cinsiyet</label>
+        <div class="segmented">
+          <button type="button" data-gender="erkek" class="active">🧑 Erkek</button>
+          <button type="button" data-gender="kadin">👩 Kadın</button>
+        </div>
+
+        <button class="btn btn-primary" id="generateBtn">🎵 Müzik Üret</button>
+      </div>
+
+      <!-- Sağ: Durum / Sonuç -->
+      <div>
+        <div class="card" id="statusCard">
+          <h3><span class="emoji">📡</span> Üretim Durumu</h3>
+          <div id="statusIdle">
+            <div class="empty-state" style="padding: 30px 10px">
+              <div class="big">🎶</div>
+              <p>Formu doldurun ve "Müzik Üret"e basın.<br />Üretim durumu ve sonucunuz burada görünecek.</p>
+            </div>
+          </div>
+
+          <div id="statusLoading" class="hidden">
+            <div class="progress-ring-wrap">
+              <div class="eq" style="height: 40px">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <div class="ring-label" id="statusMsg">Şarkınız hazırlanıyor...</div>
+              <div class="timer" id="genTimer">00:00</div>
+              <p class="timer-note" id="genTimerNote">⏱️ Tahmini bekleme süresi: 2-5 dakika</p>
+            </div>
+            <div class="status-steps">
+              <div class="step" id="step-submitted"><span class="step-icon">📤</span> Gönderildi</div>
+              <div class="step" id="step-pending"><span class="step-icon">⏳</span> Kuyrukta bekleniyor</div>
+              <div class="step" id="step-generating"><span class="step-icon">🤖</span> AI besteliyor...</div>
+              <div class="step" id="step-complete"><span class="step-icon">✅</span> Müzik hazır</div>
+            </div>
+          </div>
+
+          <div id="statusError" class="hidden">
+            <div class="empty-state" style="padding: 24px 10px">
+              <div class="big" id="errorIcon">😞</div>
+              <h3 id="errorTitle">Bir Hata Oluştu</h3>
+              <p id="errorMsg">Bir hata oluştu.</p>
+              <div class="btn-row" style="justify-content: center">
+                <button class="btn btn-ghost btn-sm" id="retryBtn">🔄 Tekrar Dene</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="resultCard" class="hidden" style="margin-top: 20px"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/common.js?v=5"></script>
+  <script>
+    renderShell("index.html");
+
+    const $ = (id) => document.getElementById(id);
+    let currentGender = "erkek";
+    let generating = false;
+    let timerInterval = null;
+    const timerEl = $("genTimer");
+    const timerNote = $("genTimerNote");
+
+    function startTimer(videoOn) {
+      if (timerInterval) clearInterval(timerInterval);
+      timerNote.textContent = videoOn
+        ? "⏱️ Tahmini bekleme süresi: 4-7 dakika (video üretimi dahil)"
+        : "⏱️ Tahmini bekleme süresi: 2-5 dakika";
+      const start = Date.now();
+      timerEl.textContent = "00:00";
+      timerInterval = setInterval(() => {
+        const s = Math.floor((Date.now() - start) / 1000);
+        timerEl.textContent =
+          String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
+      }, 1000);
+    }
+
+    function stopTimer() {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+        timerInterval = null;
+      }
+    }
+
+    bindCharCount("songLyrics", 5000);
+
+    const draft = sessionStorage.getItem("draftPrompt");
+    const draftName = sessionStorage.getItem("draftSongName");
+    const draftLyrics = sessionStorage.getItem("draftLyrics");
+    if (draft) {
+      $("songStyle").value = draft;
+      toast("Prompt Oluşturucu'dan stil yüklendi 🎨", "success");
+      sessionStorage.removeItem("draftPrompt");
+    }
+    if (draftName) {
+      $("songName").value = draftName;
+      sessionStorage.removeItem("draftSongName");
+    }
+    if (draftLyrics) {
+      $("songLyrics").value = draftLyrics;
+      toast("Şarkı sözleri hazırlandı ✍️", "info");
+      sessionStorage.removeItem("draftLyrics");
+    }
+    if (sessionStorage.getItem("draftInstrumental")) {
+      $("instrumental").checked = true;
+      sessionStorage.removeItem("draftInstrumental");
+    }
+
+    document.querySelectorAll(".segmented button").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll(".segmented button").forEach((x) => x.classList.remove("active"));
+        b.classList.add("active");
+        currentGender = b.dataset.gender;
+      });
+    });
+
+    function showStatus(state, msg) {
+      $("statusIdle").classList.toggle("hidden", true);
+      $("statusLoading").classList.toggle("hidden", state !== "loading");
+      $("statusError").classList.toggle("hidden", state !== "error");
+      $("statusMsg").textContent = msg || "";
+
+      const steps = {
+        submitted: ["step-submitted"],
+        pending: ["step-submitted", "step-pending"],
+        generating: ["step-submitted", "step-pending", "step-generating"],
+        complete: ["step-submitted", "step-pending", "step-generating", "step-complete"],
+      };
+
+      ["step-submitted", "step-pending", "step-generating", "step-complete"].forEach((s) => setStep(s, null));
+      if (steps[state]) {
+        steps[state].forEach((s, i) => {
+          setStep(s, i === steps[state].length - 1 ? "active" : "done");
+        });
+      }
+      if (state === "error") setStep("step-submitted", "error");
+    }
+
+    function renderResult(track) {
+      const card = $("resultCard");
+      const title = track.title || "Şarkı";
+      const image = track.imageUrl || "assets/img/cover-placeholder.svg";
+      const tags = track.tags || "";
+      const isVideo = track.blobMime && (track.blobMime.includes("video") || track.blobMime.includes("mp4"));
+      const ext = isVideo ? "mp4" : "mp3";
+      const note = track.note ? `<p style="font-size:0.78rem;color:var(--success);margin-top:10px">ℹ️ ${track.note}</p>` : "";
+
+      card.innerHTML = `
+        <div class="song-card">
+          <div class="cover">
+            <span class="badge">✨ AI Üretimi — ${track.provider === "suno" ? "Suno API" : "n8n"}</span>
+            <img src="${image}" alt="${title}" onerror="this.src='assets/img/cover-placeholder.svg'" />
+            <div class="meta">
+              <h4>${title}</h4>
+              <p>${tags || "Şarkı"}</p>
+            </div>
+          </div>
+          <div class="body">
+            ${isVideo
+              ? `<video controls src="${track.audioUrl}" preload="metadata" style="width:100%;border-radius:10px;background:#000"></video>`
+              : `<audio controls src="${track.audioUrl}" preload="metadata"></audio>`}
+            ${note}
+            <div class="btn-row">
+              <button class="btn btn-ghost btn-sm" onclick="downloadFile('${track.audioUrl}', '${title.replace(/['"]/g, "")}.${ext}')">⬇️ İndir ${ext.toUpperCase()}</button>
+              <button class="btn btn-ghost btn-sm" onclick="location.href='index.html'">➕ Yeni Müzik</button>
+            </div>
+          </div>
+        </div>`;
+
+      card.classList.remove("hidden");
+
+      History.add({
+        id: track.id,
+        provider: track.provider,
+        title,
+        tags,
+        audioUrl: track.audioUrl,
+        imageUrl: image,
+        blobMime: track.blobMime || "",
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    $("generateBtn").addEventListener("click", async () => {
+      if (generating) return;
+      generating = true;
+      $("generateBtn").disabled = true;
+      $("resultCard").classList.add("hidden");
+      stopTimer();
+
+      let payload;
+      try {
+        const style = $("songStyle").value.trim();
+        const lyrics = $("songLyrics").value.trim();
+        const title = $("songName").value.trim();
+        const instrumental = $("instrumental").checked;
+        const video = $("makeVideo").checked;
+        const autoLyrics = $("autoLyrics").checked;
+
+        const finalStyle = style || (typeof randomMusicStyle === "function" ? randomMusicStyle() : "turkish pop, emotional");
+        const finalTitle = title || (typeof randomSongTitle === "function" ? randomSongTitle() : "Yeni Şarkı");
+        const finalLyrics = lyrics || generateLyrics(finalStyle, finalTitle);
+
+        if (!style) {
+          $("songStyle").value = finalStyle;
+          toast("Stil boştu, otomatik oluşturuldu: " + finalStyle, "info");
+        }
+        if (!title) {
+          $("songName").value = finalTitle;
+          toast("Şarkı adı boştu, otomatik oluşturuldu: " + finalTitle, "info");
+        }
+        if (!lyrics) {
+          $("songLyrics").value = finalLyrics;
+          toast(autoLyrics ? "Sözler AI tarafından oluşturuldu" : "Söz yazılmadı, AI otomatik söz üretti", "info");
+        }
+
+        const genderLabel = currentGender === "erkek" ? "Erkek" : "Kadın";
+
+        payload = {
+          style: finalStyle,
+          prompt: finalLyrics,
+          songTitle: finalTitle,
+          instrumental,
+          video,
+          vokalCinsiyet: genderLabel,
+          gender: genderLabel,
+        };
+
+        showStatus("loading", "Şarkınız hazırlanıyor...");
+        startTimer(video);
+      } catch (e) {
+        generating = false;
+        $("generateBtn").disabled = false;
+        showStatus("error", "Form hazırlanırken bir hata oluştu: " + e.message);
+        $("errorMsg").textContent = e.message;
+        return;
+      }
+
+      try {
+        await startGeneration(payload, {
+          onProgress: (state) => {
+            const msgMap = {
+              submitted: "Gönderildi, bekleyin...",
+              pending: "Kuyrukta bekleniyor...",
+              generating: "AI notaları ve sözleri besteliyor, lütfen bekleyin.",
+              complete: "Müziğiniz hazır! 🎉",
+            };
+            showStatus(state === "complete" ? "loading" : state, msgMap[state] || "İşleniyor...");
+          },
+          onDone: (result) => {
+            generating = false;
+            $("generateBtn").disabled = false;
+            stopTimer();
+            if (result.status === "submitted") {
+              $("errorIcon").textContent = "📤";
+              $("errorTitle").textContent = "n8n Akışı Tetiklendi";
+              showStatus("error", result.message);
+              toast("n8n akışı tetiklendi", "success");
+              return;
+            }
+            $("errorIcon").textContent = "😞";
+            $("errorTitle").textContent = "Bir Hata Oluştu";
+            showStatus("complete", "Müziğiniz hazır! 🎉");
+            renderResult(result);
+            toast("Müzik oluşturuldu! 🎉", "success", 5000);
+          },
+          onError: (msg) => {
+            generating = false;
+            $("generateBtn").disabled = false;
+            stopTimer();
+            showStatus("error", msg);
+            $("errorMsg").textContent = msg;
+            toast(msg, "error", 6000);
+          },
+        });
+      } catch (e) {
+        generating = false;
+        $("generateBtn").disabled = false;
+        stopTimer();
+        showStatus("error", e.message);
+      }
+    });
+
+    $("retryBtn").addEventListener("click", () => {
+      $("generateBtn").click();
+    });
+  </script>
+</body>
+</html>

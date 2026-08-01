@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Music Studio — Ayarlar</title>
+  <meta name="description" content="n8n webhook veya Suno API bağlantı ayarları." />
+  <link rel="stylesheet" href="assets/css/style.css?v=5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚙️</text></svg>" />
+</head>
+<body>
+  <div id="loginOverlay" class="login-overlay hidden">
+    <div class="login-card">
+      <div class="login-logo">🎵</div>
+      <h2 id="loginTitle">Yönetim Girişi</h2>
+      <p class="login-sub" id="loginSub">Ayarlara erişmek için şifrenizi girin</p>
+      <input type="password" id="loginPass" placeholder="Şifre" autocomplete="current-password" />
+      <input type="password" id="loginPass2" class="hidden" placeholder="Şifre (tekrar)" autocomplete="new-password" />
+      <button class="btn btn-primary" id="loginBtn" style="margin-top: 6px">Giriş Yap</button>
+      <p class="login-error" id="loginError"></p>
+      <p class="login-hint">İlk açılışta yönetim şifresi belirlenir; sonraki açılışlarda şifre istenir. 5 hatalı denemede 30 sn kilitlenir.</p>
+    </div>
+  </div>
+
+  <div class="container" style="max-width: 860px">
+    <h1 class="page-title">Ayarlar</h1>
+    <p class="page-sub">Müzik üretim motoruna nasıl bağlanacağınızı yapılandırın</p>
+
+    <div class="card">
+      <div class="setting-group">
+        <h4>🔌 Bağlantı Modu</h4>
+        <div class="desc">Suno'nun resmi bir public API'si yoktur. İki yöntemden birini seçin.</div>
+
+        <div class="mode-cards">
+          <div class="mode-card active" data-mode="n8n">
+            <div class="mode-title">🔗 n8n Webhook</div>
+            <div class="mode-desc">
+              Kendi n8n kurulumunuz varsa en kolay yol. Site, prompt'u n8n akışınıza POST eder;
+              akış, Suno ile iletişimi (ücretsiz hesap dahil) sizin için yönetir.
+            </div>
+          </div>
+          <div class="mode-card" data-mode="suno">
+            <div class="mode-title">🌐 Suno API Servisi</div>
+            <div class="mode-desc">
+              Üçüncü parti Suno API sağlayıcısı (sunor.cc, songapi.dev vb.). API key alır,
+              site doğrudan üretim yapar ve sonucu otomatik indirir.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- n8n ayarları -->
+      <div class="setting-group" id="n8nSettings">
+        <h4>🔗 n8n Webhook Ayarları</h4>
+        <div class="desc">n8n'de <b>Webhook</b> düğümü oluşturun (POST, "Respond to Webhook" açık) ve URL'yi buraya yapıştırın.</div>
+
+        <label for="n8nUrl">Webhook URL</label>
+        <input type="text" id="n8nUrl" placeholder="https://n8n.example.com/webhook/muzik-uret" />
+
+        <label for="n8nProxyUrl">Proxy URL (CORS için — önerilir)</label>
+        <input type="text" id="n8nProxyUrl" placeholder="http://localhost:3000/api/n8n — boş bırakılırsa tarayıcı doğrudan bağlanır" />
+        <div class="hint-text">
+          n8n'de CORS açılmamışsa tarayıcı webhook'a doğrudan bağlanamaz. Sunucuyla gelen proxy
+          (<kbd>server/server.js</kbd>, <kbd>npm start</kbd>) bu engeli aşar: istek önce kendi
+          sunucuna gider, sunucu n8n'e bağlanır. n8n'de Options → Allowed Origins (CORS) → <kbd>*</kbd>
+          yaparsanız bu alanı boş bırakabilirsiniz.
+        </div>
+
+        <div class="hint-text" style="margin-top: 10px">n8n akışınız şu JSON'u alır:</div>
+        <div class="code" id="n8nExample"></div>
+        <div class="hint-text">
+          Akışta Suno'yu çağırmak için (opsiyonel): self-hosted
+          <a href="https://github.com/gcui-art/suno-api" target="_blank" rel="noopener">gcui-art/suno-api</a> veya
+          <a href="https://sunor.cc" target="_blank" rel="noopener">sunor.cc</a> API'sini <b>HTTP Request</b> düğümüyle kullanabilirsiniz.
+          Dönen <kbd>audio_url</kbd>'yi <b>Webhook Response</b> olarak geri gönderin.
+        </div>
+      </div>
+
+      <!-- Suno API ayarları -->
+      <div class="setting-group hidden" id="sunoSettings">
+        <h4>🌐 Suno API Servisi Ayarları</h4>
+        <div class="desc">
+          Önerilen sağlayıcılar: <b>sunor.cc</b> (25 ücretsiz kredi, Google ile kayıt) ve
+          <b>songapi.dev</b> (ücretsiz sandbox). Key'i ilgili sitenin dashboard'undan alın.
+        </div>
+
+        <label for="sunoApiType">Sağlayıcı</label>
+        <select id="sunoApiType">
+          <option value="sunoapi">sunoapi.org (API) — önerilen</option>
+          <option value="sunor">sunor.cc</option>
+          <option value="songapi">songapi.dev</option>
+          <option value="apiframe">apiframe.ai</option>
+          <option value="gcui">gcui-art/suno-api (self-hosted)</option>
+          <option value="custom">Özel / Diğer</option>
+        </select>
+
+        <label for="sunoBaseUrl">API Base URL</label>
+        <input type="text" id="sunoBaseUrl" placeholder="https://api.sunoapi.org" />
+
+        <label for="sunoApiKey">API Key</label>
+        <input type="password" id="sunoApiKey" placeholder="sk_live_... / x-api-key değeriniz" />
+
+        <label for="sunoBackendUrl">Backend Proxy URL</label>
+        <input type="text" id="sunoBackendUrl" placeholder="http://localhost:3000" />
+        <div class="hint-text">
+          API çağrıları tarayıcıdan yapılamaz (CORS engeli) — bu yüzden varsayılan olarak projeyle gelen
+          <kbd>server/server.js</kbd> proxy'si (<kbd>http://localhost:3000</kbd>) kullanılır ve API key gizli kalır.
+          <b>Netlify'da:</b> bu alanı <b>boş bırakın</b> — çağrılar otomatik olarak Netlify Functions'a (<kbd>/api/...</kbd>) gider.
+          <b>Önemli:</b> Sağlayıcı ile Base URL eşleşmeli: <b>sunoapi</b> → <kbd>https://api.sunoapi.org</kbd>,
+          <b>sunor</b> → <kbd>https://sunor.cc/api/v1</kbd> vb. Proxy çalışmıyorsa <kbd>server</kbd> klasöründe <kbd>npm start</kbd> çalıştırın.
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-ghost btn-sm" id="testSunoBtn">🔍 Bağlantıyı Test Et</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <h4>🎛️ Model (tüm modlar)</h4>
+        <label for="modelSelect">Suno Modeli</label>
+        <select id="modelSelect">
+          <option value="V4_5">V4.5 — dengeli</option>
+          <option value="V4_5PLUS">V4.5+ — daha zengin ses</option>
+          <option value="V4_5ALL">V4.5-all — daha iyi yapı</option>
+          <option value="V5">V5 — üstün ifade, hızlı</option>
+          <option value="V5_5">V5.5 — en yeni (10-360 sn özel süre)</option>
+        </select>
+      </div>
+
+      <button class="btn btn-primary" id="saveBtn" style="margin-top: 8px">💾 Kaydet</button>
+    </div>
+
+    <div class="card" style="margin-top: 20px">
+      <h3><span class="emoji">🔐</span> Güvenlik</h3>
+      <div class="setting-group" style="border: none; padding: 0">
+        <label for="newPass">Yeni Yönetim Şifresi</label>
+        <input type="password" id="newPass" placeholder="Yeni şifre (en az 4 karakter)" autocomplete="new-password" />
+        <label for="newPass2">Yeni Şifre (tekrar)</label>
+        <input type="password" id="newPass2" placeholder="Yeni şifre tekrar" autocomplete="new-password" />
+        <div class="btn-row">
+          <button class="btn btn-ghost btn-sm" id="changePassBtn">🔐 Şifreyi Değiştir</button>
+          <button class="btn btn-danger btn-sm" id="logoutBtn">🚪 Çıkış Yap</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top: 20px">
+      <h3><span class="emoji">📖</span> Hızlı Kurulum Rehberi</h3>
+      <div class="setting-group" style="border: none; padding: 0">
+        <div class="desc">
+          <b>Seçenek 1 — n8n ile (ücretsiz Suno hesabı):</b><br />
+          1. n8n'de Webhook düğümü ekleyin (POST).<br />
+          2. HTTP Request düğümüyle sunor.cc veya self-hosted suno-api'ye bağlanın.<br />
+          3. Yanıttaki <kbd>audio_url</kbd>'yi "Respond to Webhook" ile geri döndürün.<br /><br />
+          <b>Seçenek 2 — Suno API ile (en kolay):</b><br />
+          1. sunor.cc'ye Google ile kaydolun, 25 ücretsiz kredi alın.<br />
+          2. Dashboard'dan API key oluşturun.<br />
+          3. Bu sayfaya key'i ve base URL'yi girin, kaydedin.<br />
+          4. Gerekirse server/server.js proxy'sini çalıştırın (key'i gizli tutar).
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/common.js?v=5"></script>
+  <script>
+    renderShell("/settings.html");
+
+    const $ = (id) => document.getElementById(id);
+    let cfg = Config.get();
+
+    const ProviderKeys = {
+      get() {
+        return Store.get("musicProviderKeys", {});
+      },
+      getKey(provider) {
+        return ProviderKeys.get()[provider] || "";
+      },
+      set(provider, key) {
+        const m = ProviderKeys.get();
+        if (!key.trim()) delete m[provider];
+        else m[provider] = key.trim();
+        Store.set("musicProviderKeys", m);
+      },
+    };
+
+    /* ── Giriş paneli ── */
+    const loginOverlay = $("loginOverlay");
+    const loginTitle = $("loginTitle");
+    const loginSub = $("loginSub");
+    const loginPass = $("loginPass");
+    const loginPass2 = $("loginPass2");
+    const loginError = $("loginError");
+    const loginBtn = $("loginBtn");
+    let setupMode = false;
+
+    function showLogin() {
+      setupMode = !SettingsAuth.hasPassword();
+      loginOverlay.classList.remove("hidden");
+      loginPass.value = "";
+      loginPass2.value = "";
+      loginError.textContent = "";
+      loginPass2.classList.toggle("hidden", !setupMode);
+      loginTitle.textContent = setupMode ? "Yönetim Şifresi Belirle" : "Yönetim Girişi";
+      loginSub.textContent = setupMode
+        ? "İlk kurulum: ayarları korumak için bir şifre oluşturun"
+        : "Ayarlara erişmek için şifrenizi girin";
+      loginBtn.textContent = setupMode ? "Şifreyi Kaydet" : "Giriş Yap";
+      loginPass.focus();
+    }
+
+    async function handleLogin() {
+      const pw = loginPass.value;
+      const lock = SettingsAuth.lockRemaining();
+      if (lock > 0) {
+        loginError.textContent = `Çok fazla hatalı deneme. ${Math.ceil(lock / 1000)} sn sonra tekrar deneyin.`;
+        return;
+      }
+      if (!pw) {
+        loginError.textContent = "Şifre girin";
+        return;
+      }
+      if (setupMode) {
+        if (pw.length < 4) {
+          loginError.textContent = "Şifre en az 4 karakter olmalı";
+          return;
+        }
+        if (pw !== loginPass2.value) {
+          loginError.textContent = "Şifreler eşleşmiyor";
+          return;
+        }
+        await SettingsAuth.setPassword(pw);
+        toast("Yönetim şifresi oluşturuldu ✅", "success");
+      } else {
+        const ok = await SettingsAuth.verify(pw);
+        if (!ok) {
+          SettingsAuth.registerFail();
+          loginError.textContent =
+            SettingsAuth.lockRemaining() > 0 ? "Çok fazla hatalı deneme. 30 sn bekleyin." : "Hatalı şifre";
+          return;
+        }
+        SettingsAuth.registerSuccess();
+      }
+      SettingsAuth.setAuthed(true);
+      loginOverlay.classList.add("hidden");
+    }
+
+    loginBtn.addEventListener("click", handleLogin);
+    loginPass.addEventListener("keydown", (e) => { if (e.key === "Enter") handleLogin(); });
+    loginPass2.addEventListener("keydown", (e) => { if (e.key === "Enter") handleLogin(); });
+
+    $("changePassBtn").addEventListener("click", async () => {
+      const p1 = $("newPass").value;
+      const p2 = $("newPass2").value;
+      if (p1.length < 4) return toast("Yeni şifre en az 4 karakter olmalı", "warning");
+      if (p1 !== p2) return toast("Şifreler eşleşmiyor", "warning");
+      await SettingsAuth.setPassword(p1);
+      $("newPass").value = "";
+      $("newPass2").value = "";
+      toast("Şifre güncellendi ✅", "success");
+    });
+
+    $("logoutBtn").addEventListener("click", () => {
+      SettingsAuth.setAuthed(false);
+      showLogin();
+    });
+
+    if (!SettingsAuth.isAuthed()) showLogin();
+
+    const PROVIDER_DEFAULTS = {
+      sunoapi: "https://api.sunoapi.org",
+      sunor: "https://sunor.cc/api/v1",
+      songapi: "https://api.songapi.dev/v1",
+      apiframe: "https://api.apiframe.ai/v2",
+      gcui: "http://localhost:3000",
+      custom: "",
+    };
+
+    /* Mod seçimi */
+    function setMode(mode) {
+      cfg.mode = mode;
+      document.querySelectorAll(".mode-card").forEach((c) => c.classList.toggle("active", c.dataset.mode === mode));
+      $("n8nSettings").classList.toggle("hidden", mode !== "n8n");
+      $("sunoSettings").classList.toggle("hidden", mode !== "suno");
+    }
+
+    function fill() {
+      setMode(cfg.mode);
+      $("n8nUrl").value = cfg.n8n.webhookUrl;
+      $("n8nProxyUrl").value = cfg.n8n.proxyUrl;
+      $("sunoApiType").value = cfg.suno.apiType;
+      $("sunoBaseUrl").value = cfg.suno.baseUrl;
+      $("sunoApiKey").value = ProviderKeys.getKey(cfg.suno.apiType) || cfg.suno.apiKey;
+      $("sunoBackendUrl").value = cfg.suno.backendUrl;
+      $("modelSelect").value = cfg.mode === "n8n" ? cfg.n8n.model : cfg.suno.model;
+
+      const n8nData = {
+        style: "slow traditional karadeniz ballad, very emotional, melancholic acoustic",
+        prompt: "[Verse 1]\nGökyüzü yine duman...\n\n[Chorus]\nVurgun yemiş dalgalar gibi...",
+        songTitle: "Vurgun Dalgalar",
+        instrumental: false,
+        video: true,
+        vokalCinsiyet: "Kadın",
+        gender: "Kadın",
+      };
+      $("n8nExample").textContent = JSON.stringify(n8nData, null, 2);
+    }
+
+    document.querySelectorAll(".mode-card").forEach((c) => c.addEventListener("click", () => setMode(c.dataset.mode)));
+
+    $("sunoApiType").addEventListener("change", () => {
+      const t = $("sunoApiType").value;
+      const def = PROVIDER_DEFAULTS[t];
+      if (def) {
+        $("sunoBaseUrl").value = def;
+      }
+      $("sunoApiKey").value = ProviderKeys.getKey(t);
+    });
+
+    $("sunoApiKey").addEventListener("input", () => {
+      ProviderKeys.set($("sunoApiType").value, $("sunoApiKey").value);
+    });
+
+    $("saveBtn").addEventListener("click", () => {
+      cfg.n8n.webhookUrl = $("n8nUrl").value.trim();
+      cfg.n8n.proxyUrl = $("n8nProxyUrl").value.trim();
+      cfg.suno.apiType = $("sunoApiType").value;
+      cfg.suno.baseUrl = $("sunoBaseUrl").value.trim();
+      cfg.suno.apiKey = $("sunoApiKey").value.trim();
+      cfg.suno.backendUrl = $("sunoBackendUrl").value.trim();
+      const m = $("modelSelect").value;
+      cfg.n8n.model = m;
+      cfg.suno.model = m;
+      Config.set(cfg);
+      toast("Ayarlar kaydedildi ✅", "success");
+    });
+
+    $("testSunoBtn").addEventListener("click", async () => {
+      if (!$("sunoApiKey").value.trim()) return toast("Önce API key girin", "warning");
+      cfg.suno.apiKey = $("sunoApiKey").value.trim();
+      Config.set(cfg);
+      toast("Test ediliyor...", "info");
+      try {
+        const res = await sunoCreateTask({
+          prompt: "test: ambient pad sound, 10 seconds",
+          title: "Connection Test",
+          style: "ambient",
+          instrumental: true,
+          lyrics: "",
+        });
+        toast("Bağlantı başarılı! Görev oluşturuldu: " + (res.taskId || res.id || "?"), "success");
+      } catch (e) {
+        toast("Bağlantı hatası: " + e.message.slice(0, 140), "error", 7000);
+      }
+    });
+
+    fill();
+  </script>
+</body>
+</html>

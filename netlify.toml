@@ -1,0 +1,27 @@
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# API yollarını Netlify Functions'a yönlendir
+[[redirects]]
+  from = "/api/suno/create"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
+  from = "/api/suno/status"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
+  from = "/api/suno/callback"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
+  from = "/api/n8n"
+  to = "/.netlify/functions/api"
+  status = 200

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Music Studio — Prompt Oluşturucu</title>
+  <meta name="description" content="Kategorilerden seçim yaparak profesyonel AI müzik prompt'u oluşturun." />
+  <link rel="stylesheet" href="assets/css/style.css?v=5" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎨</text></svg>" />
+</head>
+<body>
+  <div class="container">
+    <h1 class="page-title">Prompt Oluşturucu</h1>
+    <p class="page-sub">Kategorilerden seçim yaparak AI müzik prompt'unuzu kolayca oluşturun</p>
+
+    <div class="grid-2">
+      <!-- Sol: Kategoriler -->
+      <div class="card">
+        <h3><span class="emoji">🎛️</span> Seçenekler</h3>
+        <div id="categories"></div>
+      </div>
+
+      <!-- Sağ: Çıktı -->
+      <div>
+        <div class="card">
+          <h3><span class="emoji">📝</span> Oluşturulan Prompt</h3>
+          <div class="prompt-box placeholder" id="promptOutput">
+            Yukarıdaki kategorilerden seçim yaparak prompt'unuzu oluşturun...
+          </div>
+
+          <div class="btn-row">
+            <button class="btn btn-ghost btn-sm" id="copyBtn">📋 Kopyala</button>
+            <button class="btn btn-ghost btn-sm" id="useBtn">🎵 Müzik Oluştur'da Kullan</button>
+            <button class="btn btn-ghost btn-sm" id="clearBtn">🗑️ Sıfırla</button>
+          </div>
+          <button class="btn btn-primary" id="randomBtn">🎲 Komple Rastgele Şarkı Üret</button>
+        </div>
+
+        <div class="card" style="margin-top: 20px">
+          <h3><span class="emoji">⚙️</span> Ek Seçenekler</h3>
+
+          <label for="songTitleInput">🎵 Şarkı İsmi (opsiyonel)</label>
+          <input type="text" id="songTitleInput" placeholder="Boş bırakılırsa rastgele oluşturulur" maxlength="80" />
+
+          <div class="toggle-row">
+            <div>
+              <span class="label">🎼 Sadece Enstrümantal</span>
+              <span class="hint">Vokal olmadan üret</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="optInstrumental" />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <span class="label">🎚️ Vokal Efektleri Ekle</span>
+              <span class="hint">reverb, echo vb.</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="optEffects" />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <span class="label">🤖 Şarkı Sözleri Oluştur</span>
+              <span class="hint">1-2 verse, 10-15 satır</span>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="optAutoLyrics" checked />
+              <span class="slider"></span>
+            </label>
+          </div>
+
+          <label for="optWords">İçerilecek Kelimeler (virgülle ayırın)</label>
+          <input type="text" id="optWords" placeholder="örn: geceler, yıldızlar, deniz" />
+
+          <label for="optNegative">Kaçınılacak Özellikler</label>
+          <input type="text" id="optNegative" placeholder="örn: heavy metal, agresif vokal" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/js/common.js?v=5"></script>
+  <script src="assets/js/prompt.js?v=5"></script>
+  <script>
+    renderShell("/prompt.html");
+  </script>
+</body>
+</html>
