@@ -501,9 +501,8 @@ async function startGeneration(payload, callbacks) {
           let finalAudioUrl = audioUrl;
           let videoUrl = "";
           let isVideo = false;
-          const generateVideo =
-            !!payload.video &&
-            (c.apiType === "sunoapi" || /sunoapi\.org/i.test(c.baseUrl || "") || /sunoapi\.org/i.test(c.apiKey || ""));
+          const generateVideo = !!payload.video;
+          console.log("[video] toggle:", payload.video, "->", generateVideo);
           if (generateVideo) {
             onProgress("video");
             const audioId =
