@@ -32,6 +32,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/suno/video-callback"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
   from = "/api/n8n"
   to = "/.netlify/functions/api"
   status = 200

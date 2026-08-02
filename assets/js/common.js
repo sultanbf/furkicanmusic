@@ -241,14 +241,23 @@ async function sunoCreateVideoTask(taskId, audioId) {
   const c = Config.get().suno;
   const base = c.backendUrl.trim().replace(/\/$/, "");
   const url = base ? `${base}/api/suno/video/create` : "/api/suno/video/create";
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ apiType: c.apiType, apiKey: c.apiKey, baseUrl: c.baseUrl, taskId, audioId }),
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error || `Video görevi açılamadı (${res.status})`);
-  return json.taskId || json.data?.taskId || json.id;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 60000);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apiType: c.apiType, apiKey: c.apiKey, baseUrl: c.baseUrl, taskId, audioId }),
+      signal: ctrl.signal,
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(json.error || `Video görevi açılamadı (${res.status})`);
+    return json.taskId || json.data?.taskId || json.id;
+  } catch (e) {
+    throw new Error("Video görevi açılamadı: " + (e.name === "AbortError" ? "zaman aşımı" : e.message));
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 async function sunoGetVideoTask(videoTaskId) {
@@ -257,7 +266,15 @@ async function sunoGetVideoTask(videoTaskId) {
   const url = base
     ? `${base}/api/suno/video/status?taskId=${encodeURIComponent(videoTaskId)}&apiKey=${encodeURIComponent(c.apiKey)}&baseUrl=${encodeURIComponent(c.baseUrl)}`
     : `/api/suno/video/status?taskId=${encodeURIComponent(videoTaskId)}&apiKey=${encodeURIComponent(c.apiKey)}&baseUrl=${encodeURIComponent(c.baseUrl)}`;
-  return (await fetch(url)).json();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 40000);
+  try {
+    return (await fetch(url, { signal: ctrl.signal })).json();
+  } catch (e) {
+    throw new Error("Video durum sorgusu " + (e.name === "AbortError" ? "zaman aşımı" : "başarısız") + ": " + e.message);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /* ── n8n entegrasyonu ───────────────────── */
@@ -448,18 +465,30 @@ async function startGeneration(payload, callbacks) {
         await sleep(5000);
         const st = await sunoGetTask(taskId);
         const d = st.data || st;
-        const state = (d.state || d.status || "pending").toLowerCase();
-        const out = d.output && typeof d.output === "object" ? d.output : {};
-        const sunoData = d.response && d.response.sunoData ? d.response.sunoData : d.sunoData || null;
-        const items = Array.isArray(d.output)
-          ? d.output
-          : Array.isArray(d.data)
-          ? d.data
-          : Array.isArray(out.result)
-          ? out.result
-          : sunoData || d.tracks || [];
-        const first = items[0] || {};
-        const audioUrl = first.audio_url || first.audioUrl || first.url || out.audio_url || out.audioUrl || d.audio_url || d.audioUrl;
+        const dataObj = d && typeof d === "object" ? d : {};
+        const state = (dataObj.state || dataObj.status || "pending").toLowerCase();
+        const out = dataObj.output && typeof dataObj.output === "object" ? dataObj.output : {};
+        const resp = dataObj.response && typeof dataObj.response === "object" ? dataObj.response : {};
+        const tracksArr =
+          dataObj.tracks ||
+          (Array.isArray(dataObj.data) ? dataObj.data : []) ||
+          (dataObj.data && dataObj.data.tracks ? dataObj.data.tracks : []) ||
+          (resp && resp.sunoData ? resp.sunoData : []) ||
+          dataObj.sunoData ||
+          (Array.isArray(dataObj.output) ? dataObj.output : []) ||
+          (Array.isArray(out.result) ? out.result : []) ||
+          [];
+        const tracks = tracksArr;
+        const first = tracks[0] || {};
+        const audioUrl =
+          first.audio_url ||
+          first.audioUrl ||
+          first.url ||
+          dataObj.audio_url ||
+          dataObj.audioUrl ||
+          (dataObj.data && (dataObj.data.audio_url || dataObj.data.audioUrl)) ||
+          out.audio_url ||
+          out.audioUrl;
         if (state !== lastState) {
           lastState = state;
           onProgress(state);
@@ -477,7 +506,13 @@ async function startGeneration(payload, callbacks) {
             (c.apiType === "sunoapi" || /sunoapi\.org/i.test(c.baseUrl || "") || /sunoapi\.org/i.test(c.apiKey || ""));
           if (generateVideo) {
             onProgress("video");
-            const audioId = first.id || (Array.isArray(d.data) ? d.data[0]?.id : "") || (sunoData && sunoData[0]?.id) || "";
+            const audioId =
+              first.id ||
+              (Array.isArray(dataObj.data) ? dataObj.data[0]?.id : "") ||
+              (dataObj.data && dataObj.data.tracks ? dataObj.data.tracks[0]?.id : "") ||
+              (resp && resp.sunoData ? resp.sunoData[0]?.id : "") ||
+              tracks[0]?.id ||
+              "";
             if (!audioId) {
               onError("Video üretimi için parça ID bulunamadı: " + JSON.stringify(d).slice(0, 300));
               return;
@@ -511,18 +546,18 @@ async function startGeneration(payload, callbacks) {
             id: taskId,
             provider: "suno",
             status: "complete",
-            tracks: items,
+            tracks,
             audioUrl: finalAudioUrl,
             videoUrl,
             isVideo,
-            imageUrl: first.image_url || first.imageUrl || out.image_url || out.imageUrl || d.image_url || "",
-            title: first.title || out.title || payload.title || "Şarkı",
-            tags: first.tags || out.tags || payload.style || "",
+            imageUrl: first.image_url || first.imageUrl || (dataObj.data && (dataObj.data.image_url || dataObj.data.imageUrl)) || out.image_url || out.imageUrl || dataObj.image_url || "",
+            title: first.title || (dataObj.data && dataObj.data.title) || out.title || payload.title || "Şarkı",
+            tags: first.tags || (dataObj.data && dataObj.data.tags) || out.tags || payload.style || "",
           });
           return;
         }
         if (["failed", "error", "canceled", "cancelled"].includes(state) || state.includes("_failed") || state.includes("exception") || state.includes("sensitive")) {
-          onError("Üretim başarısız oldu: " + (d.message || d.error || d.errorMessage || state));
+          onError("Üretim başarısız oldu: " + (dataObj.message || dataObj.error || dataObj.errorMessage || state));
           return;
         }
       }

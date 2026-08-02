@@ -12,6 +12,11 @@ function send(statusCode, body, extra = {}) {
   };
 }
 
+/* Dış API çağrıları için timeout — yanıt gelmezse istemciyi asılı bırakmaz */
+function failTimeout(ms, label) {
+  return new Promise((_, rej) => setTimeout(() => rej(new Error(`${label}: istek zaman aşımına uğradı (${ms}ms)`)), ms));
+}
+
 async function createTask(body) {
   const { apiType, apiKey, baseUrl, ...rest } = body || {};
   const p = PROVIDER[apiType] || PROVIDER.sunor;
@@ -59,16 +64,24 @@ async function videoCreate(body) {
   if (!taskId || !audioId) return { statusCode: 400, json: { error: "taskId ve audioId gerekli" } };
 
   const url = b.endsWith("/api/v1") ? `${b}/mp4/generate` : `${b}/api/v1/mp4/generate`;
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
-    body: JSON.stringify({ taskId, audioId, callBackUrl: body.callBackUrl || "" }),
-  });
-  const json = await r.json().catch(() => ({}));
-  if (!r.ok) return { statusCode: r.status, json: { error: json.msg || json.message || `HTTP ${r.status}` } };
-  const videoTaskId = json?.data?.taskId || json?.data?.id;
-  if (!videoTaskId) return { statusCode: 502, json: { error: "Video görev ID çözümlenemedi", raw: json } };
-  return { statusCode: 200, json: { taskId: videoTaskId, raw: json } };
+  const callbackUrl = body.callBackUrl || `${process.env.URL || "https://localhost"}/api/suno/video-callback`;
+  try {
+    const r = await Promise.race([
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+        body: JSON.stringify({ taskId, audioId, callBackUrl: callbackUrl }),
+      }),
+      failTimeout(45000, "MP4 video oluştur"),
+    ]);
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok) return { statusCode: r.status, json: { error: json.msg || json.message || `HTTP ${r.status}` } };
+    const videoTaskId = json?.data?.taskId || json?.data?.id;
+    if (!videoTaskId) return { statusCode: 502, json: { error: "Video görev ID çözümlenemedi", raw: json } };
+    return { statusCode: 200, json: { taskId: videoTaskId, raw: json } };
+  } catch (e) {
+    return { statusCode: 500, json: { error: e.message } };
+  }
 }
 
 async function videoStatus(query) {
@@ -80,20 +93,24 @@ async function videoStatus(query) {
   const url = b.endsWith("/api/v1")
     ? `${b}/mp4/record-info?taskId=${encodeURIComponent(taskId)}`
     : `${b}/api/v1/mp4/record-info?taskId=${encodeURIComponent(taskId)}`;
-  const r = await fetch(url, { headers: key ? { Authorization: `Bearer ${key}` } : {} });
-  const json = await r.json().catch(() => ({}));
-  if (!r.ok) return { statusCode: r.status, json: { error: json.msg || json.message || `HTTP ${r.status}` } };
-  const d = json?.data || {};
-  return {
-    statusCode: 200,
-    json: {
-      data: {
-        successFlag: d.successFlag,
-        videoUrl: d.response?.videoUrl || d.response?.video_url || d.videoUrl || "",
-        errorMessage: d.errorMessage || json.msg || "",
+  try {
+    const r = await Promise.race([fetch(url, { headers: key ? { Authorization: `Bearer ${key}` } : {} }), failTimeout(30000, "MP4 video durum sorgusu")]);
+    const json = await r.json().catch(() => ({}));
+    if (!r.ok) return { statusCode: r.status, json: { error: json.msg || json.message || `HTTP ${r.status}` } };
+    const d = json?.data || {};
+    return {
+      statusCode: 200,
+      json: {
+        data: {
+          successFlag: d.successFlag,
+          videoUrl: d.response?.videoUrl || d.response?.video_url || d.videoUrl || "",
+          errorMessage: d.errorMessage || json.msg || "",
+        },
       },
-    },
-  };
+    };
+  } catch (e) {
+    return { statusCode: 500, json: { error: e.message } };
+  }
 }
 
 exports.handler = async (event) => {
@@ -120,6 +137,9 @@ exports.handler = async (event) => {
       return send(statusCode, json);
     }
     if (path.endsWith("/api/suno/callback")) {
+      return send(200, { status: "received" });
+    }
+    if (path.endsWith("/api/suno/video-callback")) {
       return send(200, { status: "received" });
     }
     if (path.endsWith("/api/n8n")) {
