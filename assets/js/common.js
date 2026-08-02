@@ -20,34 +20,50 @@ const Store = {
 const DEFAULT_CONFIG = {
   mode: "n8n", // "n8n" | "suno"
   n8n: {
-    webhookUrl: "https://45.43.152.156.nip.io/webhook/7e060783-665c-47f8-9fd1-823ee5b1b73f",
-    proxyUrl: "http://localhost:3000/api/n8n",
+    webhookUrl: "",
+    proxyUrl: "",
     model: "V5_5",
   },
   suno: {
-    apiType: "sunor", // sunor | songapi | apiframe | gcui
-    baseUrl: "https://sunor.cc/api/v1",
+    apiType: "sunoapi", // sunoapi | sunor | songapi | apiframe | gcui
+    baseUrl: "",
     apiKey: "",
     backendUrl: "http://localhost:3000", // proxy sunucusu (CORS engelini aşar)
     model: "V4_5",
   },
 };
 
+/* keys.js'ten gelen gömülü (sabit) değerleri uygular.
+ * API anahtarı / base URL kullanıcı tarafından görülmez;
+ * apiType seçimi base URL'yi otomatik belirler. */
+function embeddedSuno(apiType, stored) {
+  const type = apiType || DEFAULT_CONFIG.suno.apiType || "sunoapi";
+  const baseUrl = (PROVIDER_BASE_URLS && PROVIDER_BASE_URLS[type]) || "";
+  const apiKey = (EMBEDDED_KEYS && EMBEDDED_KEYS[type]) || (stored && stored.apiKey) || "";
+  return { apiType: type, baseUrl, apiKey };
+}
+
 const Config = {
   get() {
     const c = Store.get("musicConfig", null);
-    return c
-      ? {
-          ...DEFAULT_CONFIG,
-          ...c,
-          n8n: { ...DEFAULT_CONFIG.n8n, ...(c.n8n || {}), proxyUrl: Config.saneProxyUrl(c.n8n && c.n8n.proxyUrl ? c.n8n.proxyUrl : "") },
-          suno: {
-            ...DEFAULT_CONFIG.suno,
-            ...(c.suno || {}),
-            backendUrl: Config.saneProxyUrl(c.suno && c.suno.backendUrl ? c.suno.backendUrl : ""),
-          },
-        }
-      : DEFAULT_CONFIG;
+    const s = c || {};
+    const sunoEmb = embeddedSuno(s.suno && s.suno.apiType, s.suno || {});
+    const n8nWebhook = (EMBEDDED_N8N && EMBEDDED_N8N.webhookUrl) || (s.n8n && s.n8n.webhookUrl) || "";
+    const n8nProxy = (EMBEDDED_N8N && EMBEDDED_N8N.proxyUrl) || (s.n8n && s.n8n.proxyUrl) || "";
+    return {
+      ...DEFAULT_CONFIG,
+      ...s,
+      mode: s.mode || DEFAULT_CONFIG.mode,
+      n8n: { ...DEFAULT_CONFIG.n8n, ...(s.n8n || {}), webhookUrl: n8nWebhook, proxyUrl: Config.saneProxyUrl(n8nProxy) },
+      suno: {
+        ...DEFAULT_CONFIG.suno,
+        ...(s.suno || {}),
+        apiType: sunoEmb.apiType,
+        baseUrl: sunoEmb.baseUrl,
+        apiKey: sunoEmb.apiKey,
+        backendUrl: Config.saneProxyUrl((s.suno && s.suno.backendUrl) || DEFAULT_CONFIG.suno.backendUrl),
+      },
+    };
   },
   /* localhost proxy'si yalnızca sayfa localhost'ta açıldığında geçerlidir.
    * Netlify vb. remote host'ta açıldığında relative /api/... kullanılır. */
@@ -85,64 +101,6 @@ const History = {
   },
   clear() {
     Store.remove("musicHistory");
-  },
-};
-
-/* ── Ayarlar sayfası şifre koruması ─────── */
-const SettingsAuth = {
-  KEY: "musicSettingsHash",
-  SESSION: "musicSettingsAuthed",
-  ATTEMPT_KEY: "musicSettingsAttempts",
-  LOCK_KEY: "musicSettingsLockUntil",
-
-  async hash(pw) {
-    const s = "ai-music-studio::" + pw;
-    if (window.crypto && crypto.subtle) {
-      const data = new TextEncoder().encode(s);
-      const buf = await crypto.subtle.digest("SHA-256", data);
-      return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-    }
-    let h = 5381;
-    for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
-    return "djb2_" + h.toString(16);
-  },
-
-  hasPassword() {
-    return !!localStorage.getItem(this.KEY);
-  },
-
-  async setPassword(pw) {
-    localStorage.setItem(this.KEY, await this.hash(pw));
-  },
-
-  async verify(pw) {
-    return (await this.hash(pw)) === localStorage.getItem(this.KEY);
-  },
-
-  isAuthed() {
-    return sessionStorage.getItem(this.SESSION) === "1";
-  },
-
-  setAuthed(v) {
-    v ? sessionStorage.setItem(this.SESSION, "1") : sessionStorage.removeItem(this.SESSION);
-  },
-
-  lockRemaining() {
-    const until = parseInt(localStorage.getItem(this.LOCK_KEY) || "0", 10);
-    return Math.max(0, until - Date.now());
-  },
-
-  registerFail() {
-    const n = (parseInt(localStorage.getItem(this.ATTEMPT_KEY) || "0", 10) || 0) + 1;
-    localStorage.setItem(this.ATTEMPT_KEY, String(n));
-    if (n >= 5) {
-      localStorage.setItem(this.LOCK_KEY, String(Date.now() + 30000));
-      localStorage.setItem(this.ATTEMPT_KEY, "0");
-    }
-  },
-
-  registerSuccess() {
-    localStorage.setItem(this.ATTEMPT_KEY, "0");
   },
 };
 
