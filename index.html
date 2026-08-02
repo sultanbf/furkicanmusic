@@ -96,6 +96,7 @@
               <div class="step" id="step-submitted"><span class="step-icon">📤</span> Gönderildi</div>
               <div class="step" id="step-pending"><span class="step-icon">⏳</span> Kuyrukta bekleniyor</div>
               <div class="step" id="step-generating"><span class="step-icon">🤖</span> AI besteliyor...</div>
+              <div class="step hidden" id="step-video"><span class="step-icon">🎬</span> Video üretiliyor</div>
               <div class="step" id="step-complete"><span class="step-icon">✅</span> Müzik hazır</div>
             </div>
           </div>
@@ -124,6 +125,7 @@
     const $ = (id) => document.getElementById(id);
     let currentGender = "erkek";
     let generating = false;
+    let currentVideoRequested = false;
     let timerInterval = null;
     const timerEl = $("genTimer");
     const timerNote = $("genTimerNote");
@@ -182,24 +184,37 @@
     });
 
     function showStatus(state, msg) {
+      state = String(state || "").toLowerCase();
       $("statusIdle").classList.toggle("hidden", true);
       $("statusError").classList.toggle("hidden", state !== "error");
-      const isWorking = ["loading", "submitted", "pending", "generating", "video", "complete"].includes(state);
+      const isWorking = state !== "" && state !== "idle" && state !== "error";
       $("statusLoading").classList.toggle("hidden", !isWorking);
       $("statusMsg").textContent = msg || "";
 
-      const steps = {
-        submitted: ["step-submitted"],
-        pending: ["step-submitted", "step-pending"],
-        generating: ["step-submitted", "step-pending", "step-generating"],
-        video: ["step-submitted", "step-pending", "step-generating"],
-        complete: ["step-submitted", "step-pending", "step-generating", "step-complete"],
-      };
+      const stepVideo = $("step-video");
+      stepVideo.classList.toggle("hidden", !currentVideoRequested);
 
-      ["step-submitted", "step-pending", "step-generating", "step-complete"].forEach((s) => setStep(s, null));
-      if (steps[state]) {
-        steps[state].forEach((s, i) => {
-          setStep(s, i === steps[state].length - 1 ? "active" : "done");
+      const genStates = ["generating", "text_success", "audio_success", "first_success", "processing", "working", "running", "producing", "create_success", "audio", "mp3"];
+      const doneStates = ["success", "succeeded", "complete", "completed", "done", "finished", "successflag"];
+      let activeSteps;
+      if (doneStates.includes(state)) {
+        activeSteps = ["step-submitted", "step-pending", "step-generating"];
+        if (currentVideoRequested) activeSteps.push("step-video");
+        activeSteps.push("step-complete");
+      } else if (state === "video") {
+        activeSteps = ["step-submitted", "step-pending", "step-generating", "step-video"];
+      } else if (genStates.includes(state)) {
+        activeSteps = ["step-submitted", "step-pending", "step-generating"];
+      } else if (["pending", "queued", "queue", "waiting", "wait"].includes(state)) {
+        activeSteps = ["step-submitted", "step-pending"];
+      } else if (["submitted", "created", "create", "new"].includes(state)) {
+        activeSteps = ["step-submitted"];
+      }
+
+      ["step-submitted", "step-pending", "step-generating", "step-video", "step-complete"].forEach((s) => setStep(s, null));
+      if (activeSteps) {
+        activeSteps.forEach((s, i) => {
+          setStep(s, i === activeSteps.length - 1 ? "active" : "done");
         });
       }
       if (state === "error") setStep("step-submitted", "error");
@@ -297,6 +312,7 @@
           gender: genderLabel,
         };
 
+        currentVideoRequested = !!video;
         showStatus("loading", "Şarkınız hazırlanıyor...");
         startTimer(video);
       } catch (e) {
@@ -314,10 +330,15 @@
               submitted: "Gönderildi, bekleyin...",
               pending: "Kuyrukta bekleniyor...",
               generating: "AI notaları ve sözleri besteliyor, lütfen bekleyin.",
+              text_success: "AI besteliyor... (sözler hazır)",
+              audio_success: "AI besteliyor... (müzik hazırlanıyor)",
+              first_success: "AI besteliyor... (ilk parça hazır)",
+              processed: "İşleniyor...",
               video: "MP4 video hazırlanıyor, bu birkaç dakika sürebilir...",
               complete: "Müziğiniz hazır! 🎉",
+              success: "Müziğiniz hazır! 🎉",
             };
-            showStatus(state, msgMap[state] || "İşleniyor...");
+            showStatus(state, msgMap[state] || msgMap[state.split("_").slice(-1)[0]] || "İşleniyor...");
           },
           onDone: (result) => {
             generating = false;
