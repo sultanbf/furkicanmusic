@@ -40,14 +40,23 @@ const Config = {
       ? {
           ...DEFAULT_CONFIG,
           ...c,
-          n8n: { ...DEFAULT_CONFIG.n8n, ...(c.n8n || {}) },
+          n8n: { ...DEFAULT_CONFIG.n8n, ...(c.n8n || {}), proxyUrl: Config.saneProxyUrl(c.n8n && c.n8n.proxyUrl ? c.n8n.proxyUrl : "") },
           suno: {
             ...DEFAULT_CONFIG.suno,
             ...(c.suno || {}),
-            backendUrl: (c.suno && c.suno.backendUrl ? c.suno.backendUrl : "").trim(),
+            backendUrl: Config.saneProxyUrl(c.suno && c.suno.backendUrl ? c.suno.backendUrl : ""),
           },
         }
       : DEFAULT_CONFIG;
+  },
+  /* localhost proxy'si yalnızca sayfa localhost'ta açıldığında geçerlidir.
+   * Netlify vb. remote host'ta açıldığında relative /api/... kullanılır. */
+  saneProxyUrl(url) {
+    const u = (url || "").trim();
+    const pageLocal =
+      window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.protocol === "file:";
+    const isLocalProxy = /localhost|127\.0\.0\.1/.test(u);
+    return u && !isLocalProxy ? u : pageLocal ? u : "";
   },
   set(c) {
     Store.set("musicConfig", c);
@@ -227,6 +236,30 @@ async function sunoGetTask(taskId) {
   return res.json();
 }
 
+/* ── MP4 video üretimi (sunoapi.org) ────── */
+async function sunoCreateVideoTask(taskId, audioId) {
+  const c = Config.get().suno;
+  const base = c.backendUrl.trim().replace(/\/$/, "");
+  const url = base ? `${base}/api/suno/video/create` : "/api/suno/video/create";
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ apiType: c.apiType, apiKey: c.apiKey, baseUrl: c.baseUrl, taskId, audioId }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(json.error || `Video görevi açılamadı (${res.status})`);
+  return json.taskId || json.data?.taskId || json.id;
+}
+
+async function sunoGetVideoTask(videoTaskId) {
+  const c = Config.get().suno;
+  const base = c.backendUrl.trim().replace(/\/$/, "");
+  const url = base
+    ? `${base}/api/suno/video/status?taskId=${encodeURIComponent(videoTaskId)}&apiKey=${encodeURIComponent(c.apiKey)}&baseUrl=${encodeURIComponent(c.baseUrl)}`
+    : `/api/suno/video/status?taskId=${encodeURIComponent(videoTaskId)}&apiKey=${encodeURIComponent(c.apiKey)}&baseUrl=${encodeURIComponent(c.baseUrl)}`;
+  return (await fetch(url)).json();
+}
+
 /* ── n8n entegrasyonu ───────────────────── */
 async function n8nSend(payload) {
   const c = Config.get();
@@ -376,16 +409,21 @@ async function startGeneration(payload, callbacks) {
 
       const r = resp.data && resp.data.data ? resp.data.data : resp.data;
       const audio = r.audioUrl || r.audio_url;
-      if (r && (r.status === "complete" || r.status === "success" || audio)) {
+      const video = r.videoUrl || r.video_url;
+      const isVideo = !!video && String(video).length > 0;
+      if (r && (r.status === "complete" || r.status === "success" || audio || video)) {
         onDone({
           id: r.id || taskId,
           provider: "n8n",
           status: "complete",
-          audioUrl: audio,
+          audioUrl: isVideo ? video : audio,
+          videoUrl: video || "",
+          isVideo,
           imageUrl: r.imageUrl || r.image_url || "",
           title: r.title || payload.songTitle || "Şarkı",
           tags: r.tags || payload.style || "",
-          tracks: r.tracks || (audio ? [r] : []),
+          track: r,
+          tracks: r.tracks || (audio || video ? [r] : []),
         });
       } else {
         onDone({
@@ -431,12 +469,50 @@ async function startGeneration(payload, callbacks) {
             onError("Müzik üretildi ancak ses dosyası bulunamadı: " + JSON.stringify(d).slice(0, 400));
             return;
           }
+          let finalAudioUrl = audioUrl;
+          let videoUrl = "";
+          let isVideo = false;
+          const generateVideo = !!payload.video && c.apiType === "sunoapi";
+          if (generateVideo) {
+            onProgress("video");
+            const audioId = first.id || (Array.isArray(d.data) ? d.data[0]?.id : "") || (sunoData && sunoData[0]?.id) || "";
+            if (!audioId) {
+              onError("Video üretimi için parça ID bulunamadı: " + JSON.stringify(d).slice(0, 300));
+              return;
+            }
+            try {
+              const vTask = await sunoCreateVideoTask(taskId, audioId);
+              if (!vTask) throw new Error("Video görev ID alınamadı");
+              const vDeadline = Date.now() + 10 * 60 * 1000;
+              while (Date.now() < vDeadline) {
+                await sleep(5000);
+                const vs = await sunoGetVideoTask(vTask);
+                const vd = vs.data || vs;
+                const sv = (vd.successFlag || vd.status || "pending").toLowerCase();
+                if (sv === "success" && vd.videoUrl) {
+                  videoUrl = vd.videoUrl;
+                  isVideo = true;
+                  break;
+                }
+                if (["create_task_failed", "generate_mp4_failed", "callback_exception", "failed", "error"].includes(sv)) {
+                  throw new Error(vd.errorMessage || "Video üretimi başarısız oldu");
+                }
+              }
+              if (!isVideo) throw new Error("Video üretimi zaman aşımına uğradı");
+            } catch (e) {
+              onError(e.message);
+              return;
+            }
+            finalAudioUrl = videoUrl;
+          }
           onDone({
             id: taskId,
             provider: "suno",
             status: "complete",
             tracks: items,
-            audioUrl,
+            audioUrl: finalAudioUrl,
+            videoUrl,
+            isVideo,
             imageUrl: first.image_url || first.imageUrl || out.image_url || out.imageUrl || d.image_url || "",
             title: first.title || out.title || payload.title || "Şarkı",
             tags: first.tags || out.tags || payload.style || "",

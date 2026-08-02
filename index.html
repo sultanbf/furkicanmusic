@@ -208,7 +208,7 @@
       const title = track.title || "Şarkı";
       const image = track.imageUrl || "assets/img/cover-placeholder.svg";
       const tags = track.tags || "";
-      const isVideo = track.blobMime && (track.blobMime.includes("video") || track.blobMime.includes("mp4"));
+      const isVideo = !!track.isVideo || (track.blobMime && (track.blobMime.includes("video") || track.blobMime.includes("mp4")));
       const ext = isVideo ? "mp4" : "mp3";
       const note = track.note ? `<p style="font-size:0.78rem;color:var(--success);margin-top:10px">ℹ️ ${track.note}</p>` : "";
 
@@ -242,6 +242,8 @@
         title,
         tags,
         audioUrl: track.audioUrl,
+        videoUrl: track.videoUrl || "",
+        isVideo,
         imageUrl: image,
         blobMime: track.blobMime || "",
         createdAt: new Date().toISOString(),
@@ -310,9 +312,10 @@
               submitted: "Gönderildi, bekleyin...",
               pending: "Kuyrukta bekleniyor...",
               generating: "AI notaları ve sözleri besteliyor, lütfen bekleyin.",
+              video: "MP4 video hazırlanıyor, bu birkaç dakika sürebilir...",
               complete: "Müziğiniz hazır! 🎉",
             };
-            showStatus(state === "complete" ? "loading" : state, msgMap[state] || "İşleniyor...");
+            showStatus(state === "complete" || state === "video" ? "loading" : state, msgMap[state] || "İşleniyor...");
           },
           onDone: (result) => {
             generating = false;

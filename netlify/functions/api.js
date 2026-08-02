@@ -52,6 +52,50 @@ async function taskStatus(query) {
   return { statusCode: 200, json: { data: p.parse(json) } };
 }
 
+async function videoCreate(body) {
+  const { apiKey, baseUrl, taskId, audioId } = body || {};
+  const b = (baseUrl || process.env.SUNO_BASE_URL || "").replace(/\/$/, "");
+  const key = apiKey || process.env.SUNO_API_KEY;
+  if (!taskId || !audioId) return { statusCode: 400, json: { error: "taskId ve audioId gerekli" } };
+
+  const url = b.endsWith("/api/v1") ? `${b}/mp4/generate` : `${b}/api/v1/mp4/generate`;
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+    body: JSON.stringify({ taskId, audioId, callBackUrl: body.callBackUrl || "" }),
+  });
+  const json = await r.json().catch(() => ({}));
+  if (!r.ok) return { statusCode: r.status, json: { error: json.msg || json.message || `HTTP ${r.status}` } };
+  const videoTaskId = json?.data?.taskId || json?.data?.id;
+  if (!videoTaskId) return { statusCode: 502, json: { error: "Video görev ID çözümlenemedi", raw: json } };
+  return { statusCode: 200, json: { taskId: videoTaskId, raw: json } };
+}
+
+async function videoStatus(query) {
+  const { apiKey, baseUrl, taskId } = query || {};
+  const b = (baseUrl || process.env.SUNO_BASE_URL || "").replace(/\/$/, "");
+  const key = apiKey || process.env.SUNO_API_KEY;
+  if (!taskId) return { statusCode: 400, json: { error: "taskId gerekli" } };
+
+  const url = b.endsWith("/api/v1")
+    ? `${b}/mp4/record-info?taskId=${encodeURIComponent(taskId)}`
+    : `${b}/api/v1/mp4/record-info?taskId=${encodeURIComponent(taskId)}`;
+  const r = await fetch(url, { headers: key ? { Authorization: `Bearer ${key}` } : {} });
+  const json = await r.json().catch(() => ({}));
+  if (!r.ok) return { statusCode: r.status, json: { error: json.msg || json.message || `HTTP ${r.status}` } };
+  const d = json?.data || {};
+  return {
+    statusCode: 200,
+    json: {
+      data: {
+        successFlag: d.successFlag,
+        videoUrl: d.response?.videoUrl || d.response?.video_url || d.videoUrl || "",
+        errorMessage: d.errorMessage || json.msg || "",
+      },
+    },
+  };
+}
+
 exports.handler = async (event) => {
   if (event.httpMethod === "OPTIONS") return send(200, {});
 
@@ -65,6 +109,14 @@ exports.handler = async (event) => {
     }
     if (path.endsWith("/api/suno/status")) {
       const { statusCode, json } = await taskStatus(qs);
+      return send(statusCode, json);
+    }
+    if (path.endsWith("/api/suno/video/create")) {
+      const { statusCode, json } = await videoCreate(JSON.parse(event.body || "{}"));
+      return send(statusCode, json);
+    }
+    if (path.endsWith("/api/suno/video/status")) {
+      const { statusCode, json } = await videoStatus(qs);
       return send(statusCode, json);
     }
     if (path.endsWith("/api/suno/callback")) {

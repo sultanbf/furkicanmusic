@@ -60,7 +60,11 @@
             <h5>${item.title || "Şarkı"} <span style="font-size:0.7rem;color:var(--text-dim)">${badge}</span></h5>
             <p>${item.tags || "—"} · ${date}</p>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="playItem(this)" data-audio="${item.audioUrl}">▶️</button>
+          <div class="h-info">
+            <h5>${item.title || "Şarkı"} <span style="font-size:0.7rem;color:var(--text-dim)">${badge}${item.isVideo ? " 🎬" : ""}</span></h5>
+            <p>${item.tags || "—"} · ${date}</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="playItem(this)" data-audio="${item.audioUrl}" data-video="${item.isVideo ? "1" : ""}">▶️</button>
           <button class="btn btn-danger btn-sm" onclick="deleteItem('${item.id}')">✖</button>`;
         listEl.appendChild(row);
       });
@@ -69,16 +73,23 @@
     window.playItem = function (btn) {
       const url = btn.dataset.audio;
       if (!url) return;
-      const audio = document.getElementById("floatingAudio");
-      if (!audio) {
-        const a = document.createElement("audio");
-        a.id = "floatingAudio";
-        a.controls = true;
-        a.style.cssText = "position:fixed;bottom:16px;right:16px;z-index:999;width:320px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px;box-shadow:var(--shadow)";
-        document.body.appendChild(a);
+      const isVideo = btn.dataset.video === "1";
+      const existing = document.getElementById("floatingPlayer");
+      if (existing) existing.remove();
+
+      const el = document.createElement(isVideo ? "video" : "audio");
+      el.id = "floatingPlayer";
+      if (isVideo) {
+        el.setAttribute("controls", "true");
+        el.setAttribute("playsinline", "true");
+        el.style.cssText = "position:fixed;bottom:16px;right:16px;z-index:999;width:320px;max-width:90vw;background:#000;border:1px solid var(--border);border-radius:12px;padding:6px;box-shadow:var(--shadow);object-fit:contain";
+      } else {
+        el.controls = true;
+        el.style.cssText = "position:fixed;bottom:16px;right:16px;z-index:999;width:320px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:6px;box-shadow:var(--shadow)";
       }
-      document.getElementById("floatingAudio").src = url;
-      document.getElementById("floatingAudio").play();
+      document.body.appendChild(el);
+      el.src = url;
+      el.play();
     };
 
     window.deleteItem = function (id) {

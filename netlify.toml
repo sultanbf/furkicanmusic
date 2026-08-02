@@ -22,6 +22,16 @@
   status = 200
 
 [[redirects]]
+  from = "/api/suno/video/create"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
+  from = "/api/suno/video/status"
+  to = "/.netlify/functions/api"
+  status = 200
+
+[[redirects]]
   from = "/api/n8n"
   to = "/.netlify/functions/api"
   status = 200
