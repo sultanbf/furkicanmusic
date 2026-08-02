@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Music Studio — Müzik Oluştur</title>
+  <title>Furkicanmusic Studio — Müzik Oluştur</title>
   <meta name="description" content="Yapay zeka ile müzik üret. Stilini seç, sözlerini yaz, Suno.ai gücüyle profesyonel şarkı üret." />
   <link rel="stylesheet" href="assets/css/style.css?v=5" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎵</text></svg>" />
@@ -183,14 +183,16 @@
 
     function showStatus(state, msg) {
       $("statusIdle").classList.toggle("hidden", true);
-      $("statusLoading").classList.toggle("hidden", state !== "loading");
       $("statusError").classList.toggle("hidden", state !== "error");
+      const isWorking = ["loading", "submitted", "pending", "generating", "video", "complete"].includes(state);
+      $("statusLoading").classList.toggle("hidden", !isWorking);
       $("statusMsg").textContent = msg || "";
 
       const steps = {
         submitted: ["step-submitted"],
         pending: ["step-submitted", "step-pending"],
         generating: ["step-submitted", "step-pending", "step-generating"],
+        video: ["step-submitted", "step-pending", "step-generating"],
         complete: ["step-submitted", "step-pending", "step-generating", "step-complete"],
       };
 
@@ -315,7 +317,7 @@
               video: "MP4 video hazırlanıyor, bu birkaç dakika sürebilir...",
               complete: "Müziğiniz hazır! 🎉",
             };
-            showStatus(state === "complete" || state === "video" ? "loading" : state, msgMap[state] || "İşleniyor...");
+            showStatus(state, msgMap[state] || "İşleniyor...");
           },
           onDone: (result) => {
             generating = false;

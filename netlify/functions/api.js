@@ -1,4 +1,4 @@
-/* ── AI Music Studio Netlify Function ─────────────────
+/* ── Furkicanmusic Studio Netlify Function ─────────────────
  * /api/suno/create, /api/suno/status, /api/suno/callback,
  * /api/n8n yollarını server.js'deki proxy ile aynı mantıkla işler.
  */

@@ -1,4 +1,4 @@
-# 🎵 AI Music Studio
+# 🎵 Furkicanmusic Studio
 
 Suno.ai gücüyle çalışan **müzik prompt oluşturucu + şarkı üretici** web sitesi.
 

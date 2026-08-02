@@ -1,4 +1,4 @@
-/* AI Music Studio - Prompt Oluşturucu veri ve mantığı */
+/* Furkicanmusic Studio - Prompt Oluşturucu veri ve mantığı */
 
 const CATEGORIES = [
   {

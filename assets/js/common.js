@@ -1,4 +1,4 @@
-/* AI Music Studio - ortak yardımcılar ve API entegrasyonu */
+/* Furkicanmusic Studio - ortak yardımcılar ve API entegrasyonu */
 
 const Store = {
   get(key, fallback) {
@@ -472,7 +472,9 @@ async function startGeneration(payload, callbacks) {
           let finalAudioUrl = audioUrl;
           let videoUrl = "";
           let isVideo = false;
-          const generateVideo = !!payload.video && c.apiType === "sunoapi";
+          const generateVideo =
+            !!payload.video &&
+            (c.apiType === "sunoapi" || /sunoapi\.org/i.test(c.baseUrl || "") || /sunoapi\.org/i.test(c.apiKey || ""));
           if (generateVideo) {
             onProgress("video");
             const audioId = first.id || (Array.isArray(d.data) ? d.data[0]?.id : "") || (sunoData && sunoData[0]?.id) || "";
@@ -582,7 +584,7 @@ function renderShell(activePage) {
   nav.innerHTML = `
     <a class="brand" href="index.html">
       <span class="logo">🎵</span>
-      <span>AI Music Studio</span>
+      <span>Furkicanmusic Studio</span>
     </a>
     <div class="nav-links">${links}</div>
     <div class="nav-right">
