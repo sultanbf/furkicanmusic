@@ -69,13 +69,21 @@ async function videoCreate(body) {
     const r = await Promise.race([
       fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) },
+        headers: { "Content-Type": "application/json", ...(key ? { Authorization: `Bearer ${key}`, "x-api-key": key } : {}) },
         body: JSON.stringify({ taskId, audioId, callBackUrl: callbackUrl }),
       }),
       failTimeout(45000, "MP4 video oluştur"),
     ]);
     const json = await r.json().catch(() => ({}));
-    if (!r.ok) return { statusCode: r.status, json: { error: json.msg || json.message || `HTTP ${r.status}` } };
+    if (!r.ok) {
+      if (r.status === 401) {
+        return {
+          statusCode: 401,
+          json: { error: "Video (MP4) üretimi için API yetkisi reddedildi (401). API key'inizi doğrulayın ve sunuapi.org hesabınızda video üretiminin aktif olduğundan emin olun. Detay: " + (json.msg || json.message || r.status) },
+        };
+      }
+      return { statusCode: r.status, json: { error: json.msg || json.message || `HTTP ${r.status}` } };
+    }
     const videoTaskId = json?.data?.taskId || json?.data?.id;
     if (!videoTaskId) return { statusCode: 502, json: { error: "Video görev ID çözümlenemedi", raw: json } };
     return { statusCode: 200, json: { taskId: videoTaskId, raw: json } };
@@ -94,9 +102,14 @@ async function videoStatus(query) {
     ? `${b}/mp4/record-info?taskId=${encodeURIComponent(taskId)}`
     : `${b}/api/v1/mp4/record-info?taskId=${encodeURIComponent(taskId)}`;
   try {
-    const r = await Promise.race([fetch(url, { headers: key ? { Authorization: `Bearer ${key}` } : {} }), failTimeout(30000, "MP4 video durum sorgusu")]);
+    const r = await Promise.race([fetch(url, { headers: key ? { Authorization: `Bearer ${key}`, "x-api-key": key } : {} }), failTimeout(30000, "MP4 video durum sorgusu")]);
     const json = await r.json().catch(() => ({}));
-    if (!r.ok) return { statusCode: r.status, json: { error: json.msg || json.message || `HTTP ${r.status}` } };
+    if (!r.ok) {
+      if (r.status === 401) {
+        return { statusCode: 401, json: { error: "Video durum sorgusu için yetki reddedildi (401): " + (json.msg || json.message || r.status) } };
+      }
+      return { statusCode: r.status, json: { error: json.msg || json.message || `HTTP ${r.status}` } };
+    }
     const d = json?.data || {};
     return {
       statusCode: 200,
