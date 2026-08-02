@@ -74,6 +74,10 @@
           <kbd>assets/js/keys.js</kbd> içindeki <kbd>EMBEDDED_KEYS</kbd> bölümüne gömülüdür.
           Proxy için <kbd>npm start</kbd> ile <kbd>server</kbd>'i çalıştırın (Netlify'da gerekmez).
         </div>
+
+        <div class="btn-row">
+          <button class="btn btn-ghost btn-sm" id="testSunoBtn">🔍 Bağlantıyı Test Et</button>
+        </div>
       </div>
 
       <div class="setting-group">
@@ -117,6 +121,26 @@
 
     $("sunoApiType").addEventListener("change", () => {
       cfg.suno.apiType = $("sunoApiType").value;
+    });
+
+    $("testSunoBtn").addEventListener("click", async () => {
+      const c = Config.get().suno;
+      if (!c.apiKey) return toast("API key gömülü değil. assets/js/keys.js dosyasına key'i yazın.", "warning", 6000);
+      cfg.suno.apiType = $("sunoApiType").value;
+      Config.set(cfg);
+      toast("Test ediliyor (" + c.baseUrl + ")...", "info");
+      try {
+        const res = await sunoCreateTask({
+          prompt: "test: ambient pad sound, 10 seconds",
+          title: "Connection Test",
+          style: "ambient",
+          instrumental: true,
+          lyrics: "",
+        });
+        toast("Bağlantı başarılı! Görev oluşturuldu: " + (res.taskId || res.id || "?"), "success");
+      } catch (e) {
+        toast("Bağlantı hatası: " + e.message.slice(0, 160), "error", 8000);
+      }
     });
 
     $("saveBtn").addEventListener("click", () => {
