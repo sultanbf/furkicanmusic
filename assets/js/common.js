@@ -800,6 +800,28 @@ async function downloadFile(url, filename) {
   }
 }
 
+/* ── Panoya kopyalama ───────────────────── */
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand("copy");
+  } catch {}
+  ta.remove();
+}
+
 /* ── Sayaçlar ───────────────────────────── */
 function bindCharCount(id, max) {
   const el = document.getElementById(id);

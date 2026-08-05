@@ -973,6 +973,7 @@ audio::-webkit-media-controls-panel {
 .history-item {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 15px;
   padding: 15px;
   background: var(--card);
@@ -1023,6 +1024,58 @@ audio::-webkit-media-controls-panel {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Paylaşım butonları ─────────────────── */
+.h-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.share-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.share-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.share-btn:hover {
+  transform: translateY(-2px);
+  border-color: currentColor;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.share-btn:active {
+  transform: scale(0.92);
+}
+
+.share-wa { color: #25d366; }
+.share-tg { color: #229ed9; }
+.share-ig { color: #e1306c; }
+.share-yt { color: #ff3b3b; }
+
+@media (max-width: 620px) {
+  .h-actions {
+    width: 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+    margin-top: 6px;
+  }
 }
 
 .empty-state {
