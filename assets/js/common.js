@@ -18,7 +18,7 @@ const Store = {
 };
 
 const DEFAULT_CONFIG = {
-  mode: "n8n", // "n8n" | "suno"
+  mode: "suno", // "n8n" | "suno" (varsayılan: sunoapi.org)
   n8n: {
     webhookUrl: "",
     proxyUrl: "",
@@ -46,6 +46,12 @@ function embeddedSuno(apiType, stored) {
 const Config = {
   get() {
     const c = Store.get("musicConfig", null);
+    /* Eski kayıtlı webhook modu artık varsayılan değil:
+     * bir kez sunoapi.org moduna taşı (Ayarlar'dan tekrar değiştirilebilir) */
+    if (c && c.mode === "n8n") {
+      c.mode = "suno";
+      Store.set("musicConfig", c);
+    }
     const s = c || {};
     const sunoEmb = embeddedSuno(s.suno && s.suno.apiType, s.suno || {});
     const n8nWebhook = (EMBEDDED_N8N && EMBEDDED_N8N.webhookUrl) || (s.n8n && s.n8n.webhookUrl) || "";
@@ -103,6 +109,254 @@ const History = {
     Store.remove("musicHistory");
   },
 };
+
+/* ── Global müzik çalar (sayfalar arası kesintisiz devam eder) ──
+ * Son çalınan şarkının URL'i, kaldığı saniye ve oynatma durumu
+ * localStorage'a yazılır; her sayfa yüklendiğinde Player.init()
+ * ile aynı oynatıcı geri gelir ve kaldığı yerden devam eder. */
+const Player = {
+  KEY: "musicPlayerState",
+  el: null,
+  media: null,
+
+  _state() {
+    try {
+      const s = JSON.parse(localStorage.getItem(this.KEY) || "null");
+      return s && s.url ? s : null;
+    } catch {
+      return null;
+    }
+  },
+
+  _save(partial) {
+    const s = this._state() || {};
+    const next = Object.assign({}, s, partial);
+    if (!next.url) {
+      localStorage.removeItem(this.KEY);
+      return;
+    }
+    next.updatedAt = Date.now();
+    localStorage.setItem(this.KEY, JSON.stringify(next));
+  },
+
+  _clear() {
+    localStorage.removeItem(this.KEY);
+  },
+
+  _removeEl() {
+    if (this.el) {
+      this.el.remove();
+      this.el = null;
+      this.media = null;
+    }
+  },
+
+  /* renderShell her sayfada çağırır: çalınan şarkı varsa geri getirir */
+  init() {
+    const st = this._state();
+    if (!st) return;
+    this._build(st, true);
+  },
+
+  play({ url, isVideo = false, title = "Şarkı", imageUrl = "" }) {
+    this._save({ url, isVideo, title, imageUrl, currentTime: 0, playing: true });
+    this._build(this._state(), true);
+  },
+
+  stop() {
+    if (this.media) {
+      this.media.pause();
+      this.media.removeAttribute("src");
+      this.media.load();
+    }
+    this._clear();
+    this._removeEl();
+  },
+
+  _build(st, resume) {
+    this._removeEl();
+
+    const el = document.createElement("div");
+    el.className = "floating-player";
+    el.id = "floatingPlayer";
+
+    const close = document.createElement("button");
+    close.className = "fp-close";
+    close.type = "button";
+    close.setAttribute("aria-label", "Çaları kapat");
+    close.textContent = "✕";
+    close.addEventListener("click", () => this.stop());
+
+    /* Sanat / kapak */
+    const art = document.createElement("div");
+    art.className = "fp-art";
+    if (st.imageUrl && st.imageUrl !== "assets/img/cover-placeholder.svg") {
+      const img = document.createElement("img");
+      img.src = st.imageUrl;
+      img.alt = "";
+      img.onerror = () => (img.style.display = "none");
+      art.appendChild(img);
+    } else {
+      art.textContent = "🎵";
+    }
+
+    /* Başlık + durum satırı (equalizer çubuklu) */
+    const title = document.createElement("div");
+    title.className = "fp-title";
+    title.textContent = st.title || "Şarkı";
+
+    const status = document.createElement("div");
+    status.className = "fp-status";
+    status.innerHTML =
+      '<span class="fp-eq"><span></span><span></span><span></span><span></span></span>' +
+      '<span class="fp-status-text">Duraklatıldı</span>';
+
+    const meta = document.createElement("div");
+    meta.className = "fp-meta";
+    meta.appendChild(title);
+    meta.appendChild(status);
+
+    /* Medya elemanı */
+    const media = document.createElement(st.isVideo ? "video" : "audio");
+    this.media = media;
+    if (st.isVideo) {
+      media.setAttribute("controls", "true");
+      media.setAttribute("playsinline", "true");
+    } else {
+      media.className = "fp-src";
+    }
+    media.preload = "metadata";
+
+    /* Play / pause düğmesi */
+    const playBtn = document.createElement("button");
+    playBtn.className = "fp-play";
+    playBtn.type = "button";
+    playBtn.setAttribute("aria-label", "Çal / Duraklat");
+    playBtn.innerHTML = "▶";
+    playBtn.addEventListener("click", () => {
+      if (media.paused) media.play().catch(() => {});
+      else media.pause();
+    });
+
+    const setStatus = (playing) => {
+      el.classList.toggle("playing", playing);
+      playBtn.innerHTML = playing ? "❚❚" : "▶";
+      const txt = status.querySelector(".fp-status-text");
+      if (txt) txt.textContent = playing ? "Çalıyor" : "Duraklatıldı";
+    };
+
+    const main = document.createElement("div");
+    main.className = "fp-main";
+    main.appendChild(art);
+    main.appendChild(meta);
+    main.appendChild(playBtn);
+    el.appendChild(close);
+    el.appendChild(main);
+
+    /* İlerleme çubuğu + süreler (yalnızca ses için; videoda native kontroller var) */
+    let curEl = null, totalEl = null, fill = null, progress = null;
+    if (!st.isVideo) {
+      curEl = document.createElement("span");
+      curEl.className = "fp-time";
+      curEl.textContent = "0:00";
+      totalEl = document.createElement("span");
+      totalEl.className = "fp-time fp-time-total";
+      totalEl.textContent = "0:00";
+      progress = document.createElement("div");
+      progress.className = "fp-progress";
+      fill = document.createElement("div");
+      fill.className = "fp-fill";
+      progress.appendChild(fill);
+
+      const bar = document.createElement("div");
+      bar.className = "fp-bar";
+      bar.appendChild(curEl);
+      bar.appendChild(progress);
+      bar.appendChild(totalEl);
+      el.appendChild(bar);
+
+      progress.addEventListener("click", (e) => {
+        const r = progress.getBoundingClientRect();
+        const ratio = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+        if (media.duration) media.currentTime = ratio * media.duration;
+      });
+    } else {
+      const wrap = document.createElement("div");
+      wrap.className = "fp-video";
+      wrap.appendChild(media);
+      el.appendChild(wrap);
+    }
+
+    const fmt = (s) => {
+      if (!isFinite(s) || s < 0) s = 0;
+      const m = Math.floor(s / 60);
+      const r = Math.floor(s % 60);
+      return m + ":" + String(r).padStart(2, "0");
+    };
+
+    let lastSave = 0;
+    media.addEventListener("loadedmetadata", () => {
+      if (totalEl) totalEl.textContent = fmt(media.duration);
+      const t = st.currentTime || 0;
+      if (t > 0 && media.duration && t < media.duration) {
+        try {
+          media.currentTime = t;
+        } catch {}
+      }
+    });
+    media.addEventListener("play", () => {
+      setStatus(true);
+      this._save({ playing: true });
+    });
+    media.addEventListener("pause", () => {
+      setStatus(false);
+      this._save({ playing: false, currentTime: media.currentTime });
+    });
+    media.addEventListener("timeupdate", () => {
+      const now = Date.now();
+      if (now - lastSave > 2000) {
+        lastSave = now;
+        this._save({ currentTime: media.currentTime, playing: !media.paused });
+      }
+      if (fill && media.duration) {
+        fill.style.width = ((media.currentTime / media.duration) * 100).toFixed(2) + "%";
+      }
+      if (curEl) curEl.textContent = fmt(media.currentTime);
+    });
+    media.addEventListener("ended", () => {
+      setStatus(false);
+      if (fill) fill.style.width = "0%";
+      if (curEl) curEl.textContent = "0:00";
+      this._save({ currentTime: 0, playing: false });
+    });
+    media.addEventListener("error", () => {
+      this._clear();
+      this._removeEl();
+    });
+
+    if (!st.isVideo) el.appendChild(media);
+    document.body.appendChild(el);
+    this.el = el;
+
+    media.src = st.url;
+    if (resume && st.playing) {
+      setStatus(true);
+      media.play().catch(() => {
+        setStatus(false);
+        toast("▶️ Çalmak için oynatıcıdaki düğmeye dokunun", "info");
+      });
+    } else {
+      setStatus(false);
+    }
+  },
+};
+
+/* Sayfadan ayrılırken kaldığı saniyeyi sakla (diğer sayfada devam için) */
+window.addEventListener("pagehide", () => {
+  if (Player.media) {
+    Player._save({ currentTime: Player.media.currentTime, playing: !Player.media.paused });
+  }
+});
 
 /* ── Toast bildirimleri ─────────────────── */
 function toast(msg, type = "info", ms = 3200) {
@@ -567,8 +821,9 @@ const PAGES = [
 ];
 
 function renderShell(activePage) {
+  const current = String(activePage || "").replace(/^\//, "");
   const links = PAGES.map(
-    (p) => `<a href="${p.href}" class="${p.href === activePage ? "active" : ""}">${p.label}</a>`
+    (p) => `<a href="${p.href}" class="${p.href === current ? "active" : ""}">${p.label}</a>`
   ).join("");
 
   const nav = document.createElement("nav");
@@ -576,9 +831,10 @@ function renderShell(activePage) {
   nav.innerHTML = `
     <a class="brand" href="index.html">
       <span class="logo">🎵</span>
-      <span>Furkicanmusic Studio</span>
+      <span class="brand-text">Furkicanmusic Studio</span>
     </a>
-    <div class="nav-links">${links}</div>
+    <button type="button" class="nav-toggle" id="navToggle" aria-label="Menüyü aç/kapat">☰</button>
+    <div class="nav-links" id="navLinks">${links}</div>
     <div class="nav-right">
       <span class="conn-badge" id="connBadge"><span class="dot"></span>Bağlantı Yok</span>
     </div>
@@ -586,8 +842,26 @@ function renderShell(activePage) {
   document.body.prepend(nav);
   updateConnBadge();
 
+  const toggle = nav.querySelector(".nav-toggle");
+  const navLinks = nav.querySelector(".nav-links");
+  if (toggle) {
+    toggle.addEventListener("click", (e) => {
+      e.stopPropagation();
+      navLinks.classList.toggle("open");
+    });
+    navLinks.querySelectorAll("a").forEach((a) =>
+      a.addEventListener("click", () => navLinks.classList.remove("open"))
+    );
+    document.addEventListener("click", (e) => {
+      if (!nav.contains(e.target)) navLinks.classList.remove("open");
+    });
+  }
+
   const footer = document.createElement("footer");
   footer.className = "footer";
   footer.innerHTML = "© 2026 Furkan Can Çalık — Powered by Furkicanmusic";
   document.body.appendChild(footer);
+
+  /* Çalınan şarkı varsa kaldığı yerden devam et */
+  Player.init();
 }
